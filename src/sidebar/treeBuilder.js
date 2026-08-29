@@ -2,6 +2,8 @@ const vscode = require('vscode');
 const path = require('path');
 const { stripTrailingExt } = require('../utils');
 
+const collator = new Intl.Collator('ru', { sensitivity: 'base', numeric: true });
+
 function getWorkspacePath(context) {
   const wsf = vscode.workspace.workspaceFolders;
   return wsf && wsf.length > 0 ? wsf[0].uri.fsPath : context.extensionPath;
@@ -71,7 +73,7 @@ function buildFormTree(entries, workspacePath) {
 }
 
 function sortTreeNodes(nodes) {
-  return nodes.sort((a, b) => a.label.localeCompare(b.label, 'ru', { sensitivity: 'base' }));
+  return nodes.sort((a, b) => collator.compare(a.label, b.label));
 }
 
 module.exports = {

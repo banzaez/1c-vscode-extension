@@ -1,8 +1,9 @@
 const path = require('path');
-const { readXmlSnippet } = require('./fs');
+const { readXmlSnippet, readHead, _utf8Decoder } = require('./fs');
+
+const _fileKindCache = new Map();
 
 function contentIsManagedForm(text) {
-  // Обычные формы в MetaDataObject тоже содержат «logform» в xmlns:lf — проверяем корневой namespace.
   return /<Form\b[^>]*\sxmlns="http:\/\/v8\.1c\.ru\/8\.3\/xcf\/logform"/.test(text);
 }
 
@@ -10,27 +11,77 @@ function contentIsMxlTemplate(text) {
   return text.includes('<document') && (text.includes('spreadsheet') || text.includes('http://v8.1c.ru/8.2/data/spreadsheet'));
 }
 
-/** MetaDataObject-описатель обычной формы (Forms/ИмяФормы.xml). */
 function contentIsOrdinaryFormDescriptor(text) {
   return /<FormType>\s*Ordinary\s*<\/FormType>/.test(text);
 }
 
-/** MetaDataObject-описатель макета MXL (Templates/ИмяМакета.xml). */
 function contentIsMxlTemplateDescriptor(text) {
   return /<TemplateType>\s*SpreadsheetDocument\s*<\/TemplateType>/.test(text);
+}
+
+/**
+ * Быстрое определение типа по имени файла (без чтения содержимого).
+ * Возвращает 'managed' | 'ordinary' | 'mxl' | null.
+ */
+function getKindByFileName(fileName) {
+  const lower = fileName.toLowerCase();
+  if (lower === 'form.data') return 'ordinary';
+  if (lower.endsWith('.mxl')) return 'mxl';
+  if (lower === 'form.xml') return 'managed';
+  if (lower === 'template.xml') return 'mxl';
+  return null;
+}
+
+/**
+ * Определение типа из содержимого XML.
+ * Возвращает 'managed' | 'ordinary' | 'mxl' | null.
+ */
+function getKindByContent(content) {
+  if (contentIsManagedForm(content)) return 'managed';
+  if (contentIsMxlTemplate(content)) return 'mxl';
+  if (contentIsOrdinaryFormDescriptor(content)) return 'ordinary';
+  if (contentIsMxlTemplateDescriptor(content)) return 'mxl';
+  return null;
+}
+
+/**
+ * Быстрое определение типа файла 1С по URI (managed, ordinary, mxl или null) с кэшированием.
+ */
+async function detectFileKind(fileUri) {
+  const fsPath = fileUri.fsPath;
+  const fileName = path.basename(fsPath);
+
+  const kindByName = getKindByFileName(fileName);
+  if (kindByName !== null) return kindByName;
+
+  if (!fileName.toLowerCase().endsWith('.xml')) return null;
+
+  if (_fileKindCache.has(fsPath)) {
+    return _fileKindCache.get(fsPath);
+  }
+
+  try {
+    const buf = await readHead(fileUri);
+    if (!buf.length) {
+      _fileKindCache.set(fsPath, null);
+      return null;
+    }
+    const kind = getKindByContent(_utf8Decoder.decode(buf));
+    _fileKindCache.set(fsPath, kind);
+    return kind;
+  } catch (e) {
+    return null;
+  }
 }
 
 function isSupportedFile(document) {
   if (!document) return false;
   const fileName = path.basename(document.fileName);
-  if (fileName === 'form.data') return true;
-  if (fileName.toLowerCase().endsWith('.mxl')) return true;
-  if (fileName.endsWith('.xml')) {
+  const kindByName = getKindByFileName(fileName);
+  if (kindByName !== null) return true;
+  if (fileName.toLowerCase().endsWith('.xml')) {
     const text = readXmlSnippet(document);
-    if (contentIsManagedForm(text) || contentIsMxlTemplate(text) ||
-        contentIsOrdinaryFormDescriptor(text) || contentIsMxlTemplateDescriptor(text)) {
-      return true;
-    }
+    return getKindByContent(text) !== null;
   }
   return false;
 }
@@ -38,15 +89,16 @@ function isSupportedFile(document) {
 function getFileType(document) {
   if (!document) return 'unknown';
   const fileName = path.basename(document.fileName);
-  if (fileName === 'form.data') return 'ordinary';
-  if (fileName.toLowerCase().endsWith('.mxl')) return 'mxl';
-  if (fileName.endsWith('.xml')) {
+  const kindByName = getKindByFileName(fileName);
+  if (kindByName !== null) return kindByName;
+  if (fileName.toLowerCase().endsWith('.xml')) {
     const text = readXmlSnippet(document);
+    // Дескрипторы форм/макетов — не сами данные, а ссылки на них
     if (contentIsOrdinaryFormDescriptor(text) || contentIsMxlTemplateDescriptor(text)) {
       return 'metadata-descriptor';
     }
-    if (contentIsManagedForm(text)) return 'managed';
-    if (contentIsMxlTemplate(text)) return 'mxl';
+    const kindByContent = getKindByContent(text);
+    if (kindByContent !== null) return kindByContent;
   }
   return 'unknown';
 }
@@ -84,8 +136,12 @@ module.exports = {
   contentIsMxlTemplate,
   contentIsOrdinaryFormDescriptor,
   contentIsMxlTemplateDescriptor,
+  getKindByFileName,
+  getKindByContent,
+  detectFileKind,
   isSupportedFile,
   getFileType,
   canonicalOrdinaryKey,
-  canonicalMxlKey
+  canonicalMxlKey,
+  _fileKindCache
 };

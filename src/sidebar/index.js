@@ -1,8 +1,8 @@
 const vscode = require('vscode');
 const { findProjectFiles } = require('./scanner');
 const { getWorkspacePath, getFormPathSegments, buildFormTree, sortTreeNodes } = require('./treeBuilder');
-const { getSidebarIcon, _iconCache } = require('./icons');
-const { EmptyItem, FolderItem, treeNodeToFolderItems } = require('./treeItems');
+const { getFolderIcon, getFileIcon } = require('./icons');
+const { EmptyItem, FolderItem, FileItem } = require('./treeItems');
 const { ProjectFormsProvider } = require('./provider');
 
 /**
@@ -43,9 +43,9 @@ module.exports = {
   getFormPathSegments,
   buildFormTree,
   sortTreeNodes,
-  getSidebarIcon,
-  _iconCache,
+  getFolderIcon,
+  getFileIcon,
   EmptyItem,
   FolderItem,
-  treeNodeToFolderItems
+  FileItem
 };

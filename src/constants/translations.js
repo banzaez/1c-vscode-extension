@@ -1,11 +1,13 @@
-const { ITEM_META } = require('./metadata');
+const { METADATA_DEFINITIONS } = require('./metadata');
 
-// Маппинг для декораций и меток дерева — производится из ITEM_META автоматически
-const TRANSLATION_MAP = Object.fromEntries(
-  Object.entries(ITEM_META)
-    .filter(([, v]) => v.ru && v.badge)
-    .map(([k, v]) => [k, { ru: v.ru, badge: v.badge }])
-);
+// Маппинг для бейджей и русских наименований
+const TRANSLATION_MAP = {};
+
+for (const def of METADATA_DEFINITIONS) {
+  if (def.ru && def.badge) {
+    TRANSLATION_MAP[def.id.toLowerCase()] = { ru: def.ru, badge: def.badge };
+  }
+}
 
 module.exports = {
   TRANSLATION_MAP

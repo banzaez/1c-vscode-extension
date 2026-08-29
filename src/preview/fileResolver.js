@@ -17,7 +17,9 @@ async function resolveOrdinaryFormDescriptor(xmlUri) {
     if (fStat.type === vscode.FileType.File) {
       return formData;
     }
-  } catch (e) {}
+  } catch (e) {
+    // Файл не найден — это ожидаемое поведение (форма ещё не развёрнута), логировать не нужно
+  }
   return null;
 }
 
@@ -31,7 +33,9 @@ async function resolveMxlTemplateDescriptor(xmlUri) {
     if (stat.type === vscode.FileType.File) {
       return templateXml;
     }
-  } catch (e) {}
+  } catch (e) {
+    // Файл не найден — ожидаемое поведение, логировать не нужно
+  }
   return null;
 }
 
@@ -45,7 +49,9 @@ async function resolveMetadataDescriptor(uri) {
     if (contentIsMxlTemplateDescriptor(head)) {
       return resolveMxlTemplateDescriptor(uri);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error('[1c-form-viewer] Ошибка при чтении дескриптора метаданных:', uri.fsPath, e.message);
+  }
   return null;
 }
 
@@ -74,7 +80,9 @@ async function findSupportedFileInDirectory(dirUri) {
             contentIsOrdinaryFormDescriptor(content) || contentIsMxlTemplateDescriptor(content)) {
           return fileUri;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('[1c-form-viewer] Ошибка при сканировании директории:', fileUri.fsPath, e.message);
+      }
     }
   }
   return null;

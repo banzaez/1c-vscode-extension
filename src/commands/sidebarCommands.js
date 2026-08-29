@@ -15,10 +15,10 @@ function registerSidebarCommands(context, projectFormsProvider, treeView) {
         placeHolder: 'Например: ВыборИнтервалаДат'
       });
       if (val !== undefined) {
-        projectFormsProvider.filterText = val.trim();
-        treeView.description = projectFormsProvider.filterText ? `Фильтр: "${projectFormsProvider.filterText}"` : '';
-        projectFormsProvider._tree = null;
-        projectFormsProvider._onDidChangeTreeData.fire();
+        projectFormsProvider.setFilter(val);
+        treeView.description = projectFormsProvider.filterText
+          ? `Фильтр: "${projectFormsProvider.filterText}"`
+          : '';
       }
     }
   );
@@ -27,10 +27,8 @@ function registerSidebarCommands(context, projectFormsProvider, treeView) {
     '1c-form-viewer.clearProjectFormsFilter',
     () => {
       if (projectFormsProvider.filterText) {
-        projectFormsProvider.filterText = '';
+        projectFormsProvider.setFilter('');
         treeView.description = '';
-        projectFormsProvider._tree = null;
-        projectFormsProvider._onDidChangeTreeData.fire();
       }
     }
   );

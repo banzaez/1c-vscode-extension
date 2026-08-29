@@ -7,16 +7,23 @@ const bslSemanticLegend = new vscode.SemanticTokensLegend(
   ['declaration']             // модификаторы: declaration=0
 );
 
+// Кэш строк паттернов для RegExp (не сами объекты RegExp — они не переиспользуются
+// из-за флага `g` и сброса lastIndex между async вызовами VSCode)
+const _patternCache = new Map();
+
 /**
- * Строит RegExp для точного поиска слова с учётом кириллицы
- * (стандартный \b не работает с кириллицей)
+ * Строит RegExp для точного поиска слова с учётом кириллицы.
+ * Каждый вызов возвращает новый RegExp с флагом `g` — безопасно для параллельных callbacks.
  */
 function bslWordRegex(word) {
-  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(
-    `(?<![a-zA-Zа-яА-ЯёЁ_0-9])${escaped}(?![a-zA-Zа-яА-ЯёЁ_0-9])`,
-    'g'
-  );
+  let pattern = _patternCache.get(word);
+  if (!pattern) {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    pattern = `(?<![a-zA-Zа-яА-ЯёЁ_0-9])${escaped}(?![a-zA-Zа-яА-ЯёЁ_0-9])`;
+    if (_patternCache.size > 200) _patternCache.clear();
+    _patternCache.set(word, pattern);
+  }
+  return new RegExp(pattern, 'g');
 }
 
 /**

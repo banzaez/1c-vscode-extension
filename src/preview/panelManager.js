@@ -36,10 +36,8 @@ function updateWebviewContent(info, document, extensionPath, precomputedFileType
     info.webviewReady = false;
     info.lastPostedUri = null;
     info.lastPostedVersion = null;
-    let htmlFileName = 'webview.html';
-    if (fileType === 'ordinary') htmlFileName = 'webview_ordinary.html';
-    else if (fileType === 'mxl') htmlFileName = 'webview_mxl.html';
-    info.panel.webview.html = loadWebviewHtml(htmlFileName, info.panel.webview, extensionPath);
+    // loadWebviewHtml теперь принимает тип файла напрямую
+    info.panel.webview.html = loadWebviewHtml(fileType, info.panel.webview, extensionPath);
   }
   queueWebviewUpdate(info, document);
 }
@@ -76,7 +74,11 @@ function openPanelForDocument(document, context) {
     {
       enableScripts: true,
       retainContextWhenHidden: true,
-      localResourceRoots: [vscode.Uri.file(context.extensionPath)]
+      localResourceRoots: [
+        vscode.Uri.file(context.extensionPath),
+        vscode.Uri.file(path.join(context.extensionPath, 'webview')),
+        vscode.Uri.file(path.join(context.extensionPath, 'resources', 'icons', 'standart'))
+      ]
     }
   );
 

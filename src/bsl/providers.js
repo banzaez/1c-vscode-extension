@@ -6,8 +6,19 @@ const {
   buildBslSemanticTokens
 } = require('./helpers');
 
+/**
+ * Возвращает { wordRange, word } для позиции или null, если символ не подходит для операций.
+ */
+function getWordAtPosition(document, position) {
+  const wordRange = document.getWordRangeAtPosition(position, BSL_WORD_PATTERN);
+  if (!wordRange) return null;
+  const word = document.getText(wordRange);
+  if (word.length < 2) return null;
+  return { wordRange, word };
+}
+
 const bslSymbolProvider = {
-  provideDocumentSymbols(document, token) {
+  provideDocumentSymbols(document) {
     const symbols = [];
     const text = document.getText();
     const regex = /^\s*(?:&[^\r\n]+\s+)?(?:\b(процедура|функция|procedure|function)\b)\s+([a-zA-Zа-яА-Я0-9_]+)/gim;
@@ -15,13 +26,13 @@ const bslSymbolProvider = {
     while ((match = regex.exec(text)) !== null) {
       const keyword = match[1].toLowerCase();
       const name = match[2];
-      const kind = (keyword === 'процедура' || keyword === 'procedure') 
-        ? vscode.SymbolKind.Method 
+      const kind = (keyword === 'процедура' || keyword === 'procedure')
+        ? vscode.SymbolKind.Method
         : vscode.SymbolKind.Function;
-      
+
       const lineNum = document.positionAt(match.index).line;
       const line = document.lineAt(lineNum);
-      
+
       symbols.push(new vscode.DocumentSymbol(
         name,
         match[0].trim(),
@@ -36,10 +47,9 @@ const bslSymbolProvider = {
 
 const bslHighlightProvider = {
   provideDocumentHighlights(document, position) {
-    const wordRange = document.getWordRangeAtPosition(position, BSL_WORD_PATTERN);
-    if (!wordRange) return [];
-    const word = document.getText(wordRange);
-    if (word.length < 2) return [];
+    const result = getWordAtPosition(document, position);
+    if (!result) return [];
+    const { word } = result;
 
     const text = document.getText();
     const regex = bslWordRegex(word);
@@ -61,10 +71,9 @@ const bslHighlightProvider = {
 
 const bslReferenceProvider = {
   provideReferences(document, position) {
-    const wordRange = document.getWordRangeAtPosition(position, BSL_WORD_PATTERN);
-    if (!wordRange) return [];
-    const word = document.getText(wordRange);
-    if (word.length < 2) return [];
+    const result = getWordAtPosition(document, position);
+    if (!result) return [];
+    const { word } = result;
 
     const text = document.getText();
     const regex = bslWordRegex(word);
@@ -80,21 +89,15 @@ const bslReferenceProvider = {
 
 const bslRenameProvider = {
   prepareRename(document, position) {
-    const wordRange = document.getWordRangeAtPosition(position, BSL_WORD_PATTERN);
-    if (!wordRange) {
-      throw new Error('Нельзя переименовать этот символ');
-    }
-    const word = document.getText(wordRange);
-    if (word.length < 2) {
-      throw new Error('Нельзя переименовать этот символ');
-    }
-    return { range: wordRange, placeholder: word };
+    const result = getWordAtPosition(document, position);
+    if (!result) throw new Error('Нельзя переименовать этот символ');
+    return { range: result.wordRange, placeholder: result.word };
   },
+
   provideRenameEdits(document, position, newName) {
-    const wordRange = document.getWordRangeAtPosition(position, BSL_WORD_PATTERN);
-    if (!wordRange) return null;
-    const word = document.getText(wordRange);
-    if (word.length < 2) return null;
+    const result = getWordAtPosition(document, position);
+    if (!result) return null;
+    const { word } = result;
 
     const text = document.getText();
     const regex = bslWordRegex(word);

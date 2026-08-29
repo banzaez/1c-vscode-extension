@@ -10,10 +10,14 @@ const {
   contentIsMxlTemplate,
   contentIsOrdinaryFormDescriptor,
   contentIsMxlTemplateDescriptor,
+  getKindByFileName,
+  getKindByContent,
+  detectFileKind,
   isSupportedFile,
   getFileType,
   canonicalOrdinaryKey,
-  canonicalMxlKey
+  canonicalMxlKey,
+  _fileKindCache
 } = require('./fileType');
 
 module.exports = {
@@ -25,8 +29,12 @@ module.exports = {
   contentIsMxlTemplate,
   contentIsOrdinaryFormDescriptor,
   contentIsMxlTemplateDescriptor,
+  getKindByFileName,
+  getKindByContent,
+  detectFileKind,
   isSupportedFile,
   getFileType,
   canonicalOrdinaryKey,
-  canonicalMxlKey
+  canonicalMxlKey,
+  _fileKindCache
 };

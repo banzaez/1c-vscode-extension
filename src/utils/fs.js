@@ -35,13 +35,15 @@ function readXmlSnippet(documentOrText) {
 }
 
 /**
- * Удаляет сегменты 'ext' с конца массива частей пути (мутирует массив, возвращает его).
+ * Возвращает копию массива частей пути без сегментов 'ext' в конце.
+ * Чистая функция — не мутирует входной массив.
  */
 function stripTrailingExt(parts) {
-  while (parts.length > 0 && parts[parts.length - 1].toLowerCase() === 'ext') {
-    parts.pop();
+  let end = parts.length;
+  while (end > 0 && parts[end - 1].toLowerCase() === 'ext') {
+    end--;
   }
-  return parts;
+  return parts.slice(0, end);
 }
 
 module.exports = {

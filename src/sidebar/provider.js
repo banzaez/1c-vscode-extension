@@ -1,10 +1,12 @@
 const vscode = require('vscode');
 const path = require('path');
-const { EmptyItem, FolderItem, FileItem, detectFileKind } = require('./treeItems');
+const { EmptyItem, FolderItem, FileItem } = require('./treeItems');
 const { buildFormTree, getWorkspacePath } = require('./treeBuilder');
 const { get1cOrder, TRANSLATION_MAP } = require('../constants');
+const { detectFileKind } = require('../utils');
 
 const IGNORED_NAMES = new Set(['.git', 'node_modules', '.DS_Store', '.vscode']);
+const collator = new Intl.Collator('ru', { sensitivity: 'base', numeric: true });
 
 function compare1cNodes(nameA, nameB) {
   const orderA = get1cOrder(nameA);
@@ -14,10 +16,9 @@ function compare1cNodes(nameA, nameB) {
     return orderA - orderB;
   }
 
-  // Если оба объекта одного типа или обычные имена — сортируем по русскому алфавиту отображаемого имени
   const labelA = TRANSLATION_MAP[nameA.toLowerCase()]?.ru || nameA;
   const labelB = TRANSLATION_MAP[nameB.toLowerCase()]?.ru || nameB;
-  return labelA.localeCompare(labelB, 'ru', { sensitivity: 'base' });
+  return collator.compare(labelA, labelB);
 }
 
 class ProjectFormsProvider {
@@ -30,6 +31,17 @@ class ProjectFormsProvider {
   }
 
   refresh() {
+    this._filteredTree = null;
+    this._onDidChangeTreeData.fire();
+  }
+
+  /**
+   * Устанавливает фильтр и сбрасывает дерево. Используйте этот метод вместо
+   * прямого изменения полей filterText/_filteredTree/_onDidChangeTreeData.
+   * @param {string} text - текст фильтра (пустая строка — сброс фильтра)
+   */
+  setFilter(text) {
+    this.filterText = text.trim();
     this._filteredTree = null;
     this._onDidChangeTreeData.fire();
   }
@@ -90,11 +102,11 @@ class ProjectFormsProvider {
         }
       }
 
-      // Сортировка папок по порядку Конфигуратора 1С, затем по алфавиту
+      // Сортировка папок по порядку Конфигуратора 1С, затем по алфавиту через быстрый Intl.Collator
       dirs.sort((a, b) => compare1cNodes(a.name, b.name));
 
       // Сортировка файлов по алфавиту
-      files.sort((a, b) => a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }));
+      files.sort((a, b) => collator.compare(a.name, b.name));
 
       // Создаем элементы папок
       const folderItems = dirs.map(d => new FolderItem(d.uri, d.name, this.context, parentCategory, level));

@@ -67,6 +67,5 @@ function getFileIcon(fileName, kind, context) {
 
 module.exports = {
   getFolderIcon,
-  getFileIcon,
-  _iconCache
+  getFileIcon
 };
