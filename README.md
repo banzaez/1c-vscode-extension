@@ -2,6 +2,8 @@
 
 A powerful Visual Studio Code extension for previewing, inspecting, and navigating **1C:Enterprise (1С:Предприятие)** configuration metadata files, including Managed Forms, Ordinary Forms, MXL Spreadsheet Templates, and BSL code.
 
+![1C Managed Form Viewer Preview](resources/screenshots/form.png)
+
 ---
 
 ## ✨ Key Features
@@ -12,6 +14,10 @@ A powerful Visual Studio Code extension for previewing, inspecting, and navigati
 - **Spreadsheet Documents / Templates (`Template.xml` / `.mxl`)**: Renders complex 1C spreadsheet tables with cell formatting, borders, merged cells, headers, drawings/charts, and section names.
 - **Live Preview & Hot Reload**: Automatically refreshes webview previews as you edit or save your XML files.
 - **Custom Editor Support**: Opens directly via standard editor tabs or side-by-side preview panels.
+
+| 📋 Managed Form Preview | 📊 MXL Spreadsheet Template |
+| :---: | :---: |
+| ![Managed Form](resources/screenshots/form.png) | ![MXL Template](resources/screenshots/mxl.png) |
 
 ### 2. 🌲 1C Project Explorer Sidebar
 - **Hierarchical Metadata Tree**: Groups all discovered forms, ordinary forms, and templates by 1C metadata classes:
