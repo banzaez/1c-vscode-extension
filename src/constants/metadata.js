@@ -182,13 +182,6 @@ const ITEM_META = {
   'role':                        { ru: 'Роль',                         badge: 'РЛ', icon: 'UserWithAuthentication.png' },
 };
 
-// Маппинг для декораций и меток дерева — производится из ITEM_META автоматически
-const TRANSLATION_MAP = Object.fromEntries(
-  Object.entries(ITEM_META)
-    .filter(([, v]) => v.ru && v.badge)
-    .map(([k, v]) => [k, { ru: v.ru, badge: v.badge }])
-);
-
 // Для иконок узлов уровня 2 (папка конкретного объекта): plural → singular ключ в ITEM_META
 const LEVEL2_SINGULAR = {
   'catalogs': 'catalog',
@@ -216,7 +209,6 @@ const FORM_KIND_META = {
 
 module.exports = {
   ITEM_META,
-  TRANSLATION_MAP,
   LEVEL2_SINGULAR,
   FORM_KIND_META
 };
