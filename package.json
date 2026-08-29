@@ -74,7 +74,7 @@
       "1c-form-viewer-sidebar": [
         {
           "id": "1c-form-viewer-project-forms",
-          "name": "Формы и макеты проекта",
+          "name": "Структура проекта",
           "type": "tree"
         }
       ]
@@ -82,7 +82,7 @@
     "viewsWelcome": [
       {
         "view": "1c-form-viewer-project-forms",
-        "contents": "В рабочей области не найдено форм 1С или табличных макетов.\n[Обновить список](command:1c-form-viewer.refreshProjectForms)"
+        "contents": "В рабочей области не найдено файлов.\n[Обновить список](command:1c-form-viewer.refreshProjectForms)"
       }
     ],
     "menus": {

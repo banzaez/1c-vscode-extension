@@ -1,7 +1,15 @@
 const vscode = require('vscode');
+const path = require('path');
 const { TRANSLATION_MAP, FORM_KIND_META } = require('../constants');
-const { getSidebarIcon } = require('./icons');
-const { sortTreeNodes } = require('./treeBuilder');
+const { getFolderIcon, getFileIcon } = require('./icons');
+const {
+  _utf8Decoder,
+  readHead,
+  contentIsManagedForm,
+  contentIsMxlTemplate,
+  contentIsOrdinaryFormDescriptor,
+  contentIsMxlTemplateDescriptor
+} = require('../utils');
 
 class EmptyItem extends vscode.TreeItem {
   constructor(message) {
@@ -12,39 +20,88 @@ class EmptyItem extends vscode.TreeItem {
 }
 
 class FolderItem extends vscode.TreeItem {
-  constructor(label, categoryType, context, treeNode = null) {
-    const isLeaf = !!(treeNode && treeNode.associatedUri);
-    const translation = TRANSLATION_MAP[label.toLowerCase()];
-    const displayLabel = (!isLeaf && translation) ? `${label} (${translation.ru})` : label;
-    super(displayLabel, isLeaf ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
-    this.type = categoryType;
-    this._treeNode = isLeaf ? null : treeNode;
-    this.contextValue = 'formFolder';
-    this.iconPath = getSidebarIcon(label, isLeaf, isLeaf ? treeNode.kind : null, context, treeNode ? treeNode.category : null, treeNode ? treeNode.level : 0);
+  constructor(folderUri, label, context, parentCategory = null, level = 0) {
+    const cleanLabel = label || path.basename(folderUri.fsPath);
+    const translation = TRANSLATION_MAP[cleanLabel.toLowerCase()];
+    // Отображаем только русское имя метаданных 1С (если есть перевод), иначе оригинальное имя папки
+    const displayLabel = translation?.ru || cleanLabel;
 
-    if (isLeaf) {
-      const meta = FORM_KIND_META[treeNode.kind] || FORM_KIND_META.managed;
+    super(displayLabel, vscode.TreeItemCollapsibleState.Collapsed);
+
+    this.resourceUri = folderUri;
+    this.tooltip = folderUri.fsPath;
+    this.contextValue = 'folder';
+    this.rawName = cleanLabel;
+    this.level = level;
+    this.category = parentCategory || (TRANSLATION_MAP[cleanLabel.toLowerCase()] ? cleanLabel.toLowerCase() : null);
+    this.iconPath = getFolderIcon(cleanLabel, context, parentCategory, level);
+  }
+}
+
+class FileItem extends vscode.TreeItem {
+  constructor(fileUri, kind, context) {
+    const fileName = path.basename(fileUri.fsPath);
+    super(fileName, vscode.TreeItemCollapsibleState.None);
+
+    this.resourceUri = fileUri;
+    this.tooltip = fileUri.fsPath;
+    this.kind = kind;
+    this.rawName = fileName;
+
+    if (kind === 'managed' || kind === 'ordinary' || kind === 'mxl') {
+      const meta = FORM_KIND_META[kind] || FORM_KIND_META.managed;
       this.contextValue = meta.contextValue;
       this.description = meta.description;
-      this.resourceUri = treeNode.associatedUri;
-      this.tooltip = treeNode.associatedUri.fsPath;
+      this.iconPath = getFileIcon(fileName, kind, context);
       this.command = {
-        command: '1c-form-viewer.openFormFromSidebar',
-        title: 'Открыть',
-        arguments: [treeNode.associatedUri],
+        command: '1c-form-viewer.openPreview',
+        title: 'Открыть форму / макет',
+        arguments: [fileUri]
+      };
+    } else {
+      this.contextValue = 'regularFile';
+      this.iconPath = getFileIcon(fileName, 'regular', context);
+      this.command = {
+        command: 'vscode.open',
+        title: 'Открыть файл',
+        arguments: [fileUri]
       };
     }
   }
 }
 
-function treeNodeToFolderItems(treeNode, categoryType, context) {
-  return sortTreeNodes(
-    Array.from(treeNode.children.values()).map(child => new FolderItem(child.label, categoryType, context, child))
-  );
+/**
+ * Быстрое определение типа файла 1С (managed, ordinary, mxl или null)
+ */
+async function detectFileKind(fileUri) {
+  const fileName = path.basename(fileUri.fsPath).toLowerCase();
+
+  if (fileName === 'form.data') return 'ordinary';
+  if (fileName.endsWith('.mxl')) return 'mxl';
+
+  if (fileName.endsWith('.xml')) {
+    if (fileName === 'form.xml') return 'managed';
+    if (fileName === 'template.xml') return 'mxl';
+
+    try {
+      const buf = await readHead(fileUri);
+      if (!buf.length) return null;
+      const content = _utf8Decoder.decode(buf);
+      if (contentIsManagedForm(content)) return 'managed';
+      if (contentIsMxlTemplate(content)) return 'mxl';
+      if (contentIsOrdinaryFormDescriptor(content)) return 'ordinary';
+      if (contentIsMxlTemplateDescriptor(content)) return 'mxl';
+    } catch (e) {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 module.exports = {
   EmptyItem,
   FolderItem,
-  treeNodeToFolderItems
+  FileItem,
+  detectFileKind
 };
