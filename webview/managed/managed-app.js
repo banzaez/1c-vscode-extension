@@ -1,0 +1,541 @@
+var __uid = 0;
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function L(node) {
+  if (!node) return '';
+  if (node.localName) return node.localName;
+  var t = node.tagName || node.nodeName || '';
+  return t.replace(/^.*:/, '');
+}
+function elemChildren(node) {
+  var out = []; if (!node || !node.childNodes) return out;
+  var c = node.childNodes;
+  for (var i = 0; i < c.length; i++) { if (c[i].nodeType === 1) out.push(c[i]); }
+  return out;
+}
+function childByName(node, name) {
+  var ch = elemChildren(node);
+  for (var i = 0; i < ch.length; i++) { if (L(ch[i]) === name) return ch[i]; }
+  return null;
+}
+function deepFind(node, name) {
+  var ch = elemChildren(node);
+  for (var i = 0; i < ch.length; i++) {
+    if (L(ch[i]) === name) return ch[i];
+    var d = deepFind(ch[i], name); if (d) return d;
+  }
+  return null;
+}
+function textOf(node) { return node ? String(node.textContent || '').trim() : ''; }
+function attr(node, n) { return (node && node.getAttribute) ? (node.getAttribute(n) || '') : ''; }
+function childText(node, name) { return textOf(childByName(node, name)); }
+function getLang(node, tag) {
+  var t = childByName(node, tag); if (!t) return '';
+  var f = deepFind(t, 'content'); return f ? textOf(f) : '';
+}
+function getTitle(node) { return formatText(getLang(node, 'Title')); }
+function childItems(node) {
+  var ci = childByName(node, 'ChildItems');
+  return ci ? elemChildren(ci) : [];
+}
+function humanize(s) {
+  if (!s) return '';
+  s = String(s).replace(/^.*\./, '');
+  s = s.replace(/([a-zа-яё0-9])([A-ZА-ЯЁ])/g, '$1 $2');
+  return s;
+}
+
+var GROW_TYPES = ['Table', 'SpreadSheetDocumentField', 'TextDocumentField',
+  'HTMLDocumentField', 'FormattedDocumentField', 'GraphicalSchemaField',
+  'GeographicalSchemaField', 'ChartField', 'GanttChartField', 'DendrogramField'];
+function containsGrowable(node) {
+  var ch = elemChildren(node);
+  for (var i = 0; i < ch.length; i++) {
+    if (GROW_TYPES.indexOf(L(ch[i])) >= 0) return true;
+    if (containsGrowable(ch[i])) return true;
+  }
+  return false;
+}
+function widthChars(node) { var w = parseFloat(childText(node, 'Width')); return isNaN(w) ? 0 : w; }
+function pxFromChars(ch) { return Math.round(ch * 7); }
+function isColVisible(it) {
+  var uv = childByName(it, 'UserVisible'); if (!uv) return true;
+  var c = deepFind(uv, 'Common'); if (c && textOf(c) === 'false') return false;
+  return true;
+}
+
+function ic(g) { return '<span class="ico ico-em">' + g + '</span>'; }
+function pictureRef(node) {
+  var p = childByName(node, 'Picture'); if (!p) return '';
+  var r = deepFind(p, 'Ref'); return r ? textOf(r) : '';
+}
+function iconFor(node, cmd) {
+  var key = (pictureRef(node) + ' ' + (cmd || '') + ' ' + attr(node, 'name'));
+  if (/Print|Печат/i.test(key)) return ic('\uD83D\uDDA8');
+  if (/Filter|Фильтр/i.test(key)) return ic('\u25BD');
+  if (/Report|Отчет|Отчёт/i.test(key)) return ic('\uD83D\uDCCA');
+  if (/Штрихкод|Barcode/i.test(key)) return ic('\u2502\u2551\u2502');
+  if (/Поиск|Search|Find/i.test(key)) return ic('\uD83D\uDD0D');
+  if (/Help|Справк/i.test(key)) return '<span class="ico">?</span>';
+  if (/CreateListItem|\.Create\b|Создать/i.test(key)) return '<span class="ico ico-add"></span>';
+  if (/Настроек|Settings|Настрой/i.test(key)) return ic('\u2699');
+  return '<span class="ico ico-generic"></span>';
+}
+function commandCaption(cmd, name) {
+  if (!cmd) return humanize(name);
+  if (/Help$/i.test(cmd)) return '?';
+  if (/WriteAndClose$/i.test(cmd)) return 'Записать и закрыть';
+  if (/PostAndClose$/i.test(cmd)) return 'Провести и закрыть';
+  if (/\.Post$/i.test(cmd)) return 'Провести';
+  if (/\.Write$/i.test(cmd)) return 'Записать';
+  if (/Reread$/i.test(cmd)) return 'Перечитать';
+  if (/CustomizeForm$/i.test(cmd)) return 'Изменить форму';
+  if (/CreateFolder$/i.test(cmd)) return 'Создать группу';
+  if (/\.Create$/i.test(cmd)) return 'Создать';
+  if (/\.Change$/i.test(cmd)) return 'Изменить';
+  if (/\.Copy$/i.test(cmd)) return 'Скопировать';
+  if (/SetDeletionMark$/i.test(cmd)) return 'Пометить на удаление';
+  if (/\.Print$/i.test(cmd)) return 'Печать';
+  if (/\.Find$/i.test(cmd)) return 'Найти';
+  if (/Refresh$/i.test(cmd)) return 'Обновить';
+  var parts = cmd.split('.'); return humanize(parts[parts.length - 1]);
+}
+
+function standardListButtons() {
+  return ''
+    + '<button class="btn btn-primary"><span class="ico ico-add"></span>Создать</button>'
+    + '<button class="btn btn-ico" title="Создать новую группу"><span class="ico ico-folder"></span></button>'
+    + '<button class="btn btn-ico" title="Скопировать"><span class="ico ico-copy"></span></button>'
+    + '<button class="btn btn-ico" title="Изменить"><span class="ico ico-edit"></span></button>'
+    + '<button class="btn btn-ico" title="Пометить на удаление"><span class="ico ico-del"></span></button>';
+}
+function moreBtn() { return '<button class="btn">Ещё <span class="caret">\u25BE</span></button>'; }
+
+function renderItem(node) {
+  switch (L(node)) {
+    case 'UsualGroup': return renderGroup(node);
+    case 'Pages': return renderPages(node);
+    case 'Page': return '<div class="tabpage active">' + renderChildItems(node) + '</div>';
+    case 'Table': return renderTable(node);
+    case 'InputField': return renderInput(node);
+    case 'CheckBoxField': return renderCheckbox(node);
+    case 'RadioButtonField': return renderRadio(node);
+    case 'LabelField':
+    case 'LabelDecoration':
+    case 'Decoration': return renderLabel(node);
+    case 'PictureField': return renderPicture(node);
+    case 'PictureDecoration': return renderPictureDeco(node);
+    case 'SpreadSheetDocumentField': return renderDocField(node, 'spread');
+    case 'TextDocumentField':
+    case 'HTMLDocumentField':
+    case 'FormattedDocumentField':
+    case 'GraphicalSchemaField':
+    case 'GeographicalSchemaField':
+    case 'ChartField':
+    case 'GanttChartField': return renderDocField(node, 'doc');
+    case 'CommandBar':
+    case 'AutoCommandBar': return renderCommandBar(node);
+    case 'Button': return renderButton(node);
+    case 'ButtonGroup':
+    case 'CommandGroup': return renderButtonGroup(node); // CommandGroup визуально = ButtonGroup
+    case 'Popup': return renderPopup(node);
+    default: return '';
+  }
+}
+function renderChildItems(node) {
+  return childItems(node).map(renderItem).join('');
+}
+
+function renderGroup(node) {
+  var items = childItems(node);
+  var collapsible = /Collapsible/i.test(childText(node, 'Behavior'));
+  if (items.length === 0 && !collapsible) {
+    if (/Настро/i.test(attr(node, 'name'))) return renderFilterChips();
+    return '';
+  }
+  var grp = childText(node, 'Group') || 'Vertical';
+  var horizontal = /Horizontal/i.test(grp);
+  var rep = childText(node, 'Representation');
+  var showTitle = childText(node, 'ShowTitle') !== 'false';
+  var title = getTitle(node);
+  var w = widthChars(node);
+  var grow = containsGrowable(node);
+
+  var cls = 'grp ' + (grow ? 'grow' : 'nogrow');
+  if (/NormalSeparation|WeakSeparation/i.test(rep)) cls += ' grp-bordered';
+  var style = '';
+  if (w > 0) style = ' style="flex:0 0 ' + (pxFromChars(w) + 12) + 'px;max-width:' + (pxFromChars(w) + 12) + 'px"';
+
+  var head = '';
+  if (collapsible && title) {
+    cls += ' grp-section';
+    head = '<div class="grp-collapse"><span class="tri">\u25BC</span><span class="grp-collapse-t">' + esc(title) + '</span></div>';
+  } else if (showTitle && title) {
+    head = '<div class="grp-title">' + esc(title) + '</div>';
+  }
+  var inner = items.map(renderItem).join('');
+  return '<div class="' + cls + '"' + style + '>' + head + '<div class="grp-body ' + (horizontal ? 'row' : 'col') + '">' + inner + '</div></div>';
+}
+function renderFilterChips() {
+  return '<div class="chips">'
+    + '<span class="chip">Поле1: Значение1 <b>\u2297</b></span>'
+    + '<span class="chip">Поле2: Значение2 <b>\u2297</b></span>'
+    + '</div>';
+}
+
+function renderPages(node) {
+  var pages = childItems(node).filter(function (p) { return L(p) === 'Page'; });
+  if (pages.length === 0) return '';
+  var rep = childText(node, 'PagesRepresentation');
+  var noTabs = /None/i.test(rep);
+  var pcls = 'pages ' + (containsGrowable(node) ? 'grow' : 'nogrow');
+
+  var bodies = '';
+  pages.forEach(function (p, i) {
+    bodies += '<div class="tabpage' + (i === 0 ? ' active' : '') + '">' + renderChildItems(p) + '</div>';
+  });
+
+  if (noTabs) {
+    return '<div class="' + pcls + '"><div class="tabbodies">' + bodies + '</div></div>';
+  }
+  var tabs = '';
+  pages.forEach(function (p, i) {
+    var t = getTitle(p) || humanize(attr(p, 'name'));
+    tabs += '<button class="tab' + (i === 0 ? ' active' : '') + '" type="button">' + esc(t) + '</button>';
+  });
+  return '<div class="' + pcls + '"><div class="tabbar">' + tabs + '</div>'
+    + '<div class="tabbodies">' + bodies + '</div></div>';
+}
+
+function collectColumns(items) {
+  var cols = [];
+  items.forEach(function (it) {
+    var ln = L(it);
+    if (ln === 'LabelField' || ln === 'InputField' || ln === 'PictureField' || ln === 'TextField' || ln === 'CheckBoxField') {
+      if (!isColVisible(it)) return;
+      var footer = childText(it, 'FooterText') || getLang(it, 'FooterText') || '';
+      cols.push({ title: colTitle(it), width: widthChars(it), kind: (ln === 'CheckBoxField' ? 'check' : 'text'), footerText: footer });
+    } else if (ln === 'ColumnGroup') {
+      var g = childText(it, 'Group');
+      var sub = childItems(it);
+      if (/InCell/i.test(g)) {
+        var hasCheck = sub.some(function (s) { return L(s) === 'CheckBoxField'; });
+        var footerGrp = childText(it, 'FooterText') || getLang(it, 'FooterText') || '';
+        cols.push({ title: getTitle(it) || '', width: widthChars(it), kind: (hasCheck ? 'check' : 'text'), footerText: footerGrp });
+      } else {
+        cols = cols.concat(collectColumns(sub));
+      }
+    }
+  });
+  return cols;
+}
+function colTitle(it) {
+  return getTitle(it) || humanize(childText(it, 'DataPath')) || humanize(attr(it, 'name'));
+}
+function renderTable(node) {
+  var hasHeader = childText(node, 'Header') !== 'false';
+  var isTree = /Tree/i.test(childText(node, 'Representation'));
+  var noH = childText(node, 'HorizontalLines') === 'false';
+  var noV = childText(node, 'VerticalLines') === 'false';
+  var cols = collectColumns(childItems(node));
+  if (cols.length === 0) cols = [{ title: '', width: 0, kind: 'text' }];
+
+  var ths = cols.map(function (c) {
+    var st = c.width > 0 ? (' style="width:' + pxFromChars(c.width) + 'px"') : '';
+    return '<th' + st + '>' + esc(c.title) + '</th>';
+  }).join('');
+
+  var rows = '';
+  var nrows = 10;
+  for (var r = 0; r < nrows; r++) {
+    var selCls = (r === 0) ? ' class="sel"' : '';
+    var tds = cols.map(function (c, ci) {
+      var inner = '';
+      if (c.kind === 'check') return '<td class="col-check"><input type="checkbox" disabled></td>';
+      if (ci === 0) {
+        if (isTree) {
+          var ind = (r % 3 === 0) ? 0 : (r % 3) * 14;
+          inner += '<span class="tree-indent" style="width:' + ind + 'px"></span><span class="tree-twisty">\u25B8</span>';
+        }
+        inner += '<span class="row-ico"></span>';
+      }
+      return '<td>' + inner + '</td>';
+    }).join('');
+    rows += '<tr' + selCls + '>' + tds + '</tr>';
+  }
+
+  var gcls = 'grid' + (noH ? ' no-hlines' : '') + (noV ? ' no-vlines' : '');
+  var thead = hasHeader ? ('<thead><tr>' + ths + '</tr></thead>') : '';
+
+  // FooterText: собираем итоговую строку если у колонок есть FooterText
+  var footCols = collectColumns(childItems(node));
+  var hasFooter = footCols.some(function(c) { return !!c.footerText; });
+  var tfoot = hasFooter
+    ? '<tfoot><tr>' + footCols.map(function(c) {
+        return '<td class="tfoot-cell">' + esc(c.footerText || '') + '</td>';
+      }).join('') + '</tr></tfoot>'
+    : '';
+
+  var cmd = renderTableCommandBar(node);
+  var w = widthChars(node);
+  var wrapStyle = w > 0 ? (' style="flex:0 0 ' + (pxFromChars(w) + 10) + 'px"') : '';
+  return '<div class="tablewrap"' + wrapStyle + '>' + cmd
+    + '<div class="tablescroll"><table class="' + gcls + '">' + thead + '<tbody>' + rows + '</tbody>' + tfoot + '</table></div></div>';
+}
+function renderTableCommandBar(node) {
+  var loc = childText(node, 'CommandBarLocation');
+  if (/None/i.test(loc)) return '';
+  var acb = childByName(node, 'AutoCommandBar');
+  if (!acb) return '';
+  var auto = childText(acb, 'Autofill') !== 'false';
+  var items = childItems(acb);
+  var explicit = items.map(renderItem).join('');
+  if (!auto && !explicit.trim()) return '';
+  var buttons = (auto ? standardListButtons() : '') + explicit;
+  if (!buttons.trim()) return '';
+  return '<div class="cmdbar">' + buttons + '<span class="cmd-spacer"></span>' + moreBtn() + '</div>';
+}
+
+function renderCommandBar(node) {
+  var isAuto = L(node) === 'AutoCommandBar';
+  var auto = isAuto && childText(node, 'Autofill') !== 'false';
+  var items = childItems(node);
+  var explicit = items.map(renderItem).join('');
+  if (!auto && !explicit.trim()) return '';
+  var buttons = (auto ? standardListButtons() : '') + explicit;
+  if (!buttons.trim()) return '';
+  return '<div class="cmdbar">' + buttons + '</div>';
+}
+function renderButton(node) {
+  if (/InAdditionalSubmenu/i.test(childText(node, 'LocationInCommandBar'))) return '';
+  var rep = childText(node, 'Representation');
+  var cmd = childText(node, 'CommandName');
+  var title = getTitle(node) || commandCaption(cmd, attr(node, 'name'));
+  var hasPic = childByName(node, 'Picture') != null || /Picture/i.test(rep);
+  var icon = iconFor(node, cmd);
+  if (/^Picture$/i.test(rep)) return '<button class="btn btn-ico" title="' + esc(title) + '">' + icon + '</button>';
+  return '<button class="btn">' + (hasPic ? icon : '') + esc(title) + '</button>';
+}
+function renderPopup(node) {
+  if (/InAdditionalSubmenu/i.test(childText(node, 'LocationInCommandBar'))) return '';
+  var rep = childText(node, 'Representation');
+  var title = getTitle(node) || humanize(attr(node, 'name'));
+  var icon = iconFor(node, '');
+  if (/^Picture$/i.test(rep)) return '<button class="btn btn-ico" title="' + esc(title) + '">' + icon + '<span class="caret">\u25BE</span></button>';
+  return '<button class="btn">' + esc(title) + ' <span class="caret">\u25BE</span></button>';
+}
+function renderButtonGroup(node) {
+  var src = childText(node, 'CommandSource');
+  var inner = childItems(node).map(renderItem).join('');
+  if (/^Item\./i.test(src) && !inner.trim()) inner = standardListButtons();
+  if (!inner.trim()) return '';
+  return '<span class="btn-group">' + inner + '</span>';
+}
+
+function renderInput(node) {
+  var titleLoc = childText(node, 'TitleLocation');
+  var title = getTitle(node) || humanize(childText(node, 'DataPath'));
+  var hint = getLang(node, 'InputHint');
+  var clear = childText(node, 'ClearButton') === 'true';
+  var list = childText(node, 'ChoiceListButton') === 'true';
+  var open = childText(node, 'OpenButton') === 'true';
+  var choice = childText(node, 'ChoiceButton') === 'true'; // кнопка «...» диалога выбора
+  var stretch = childText(node, 'HorizontalStretch') !== 'false';
+  var w = widthChars(node);
+  var h = parseFloat(childText(node, 'Height'));
+  var vstretch = childText(node, 'VerticalStretch') === 'true';
+  var isMultiline = (!isNaN(h) && h > 1) || vstretch;
+  var editMode = childText(node, 'EditMode');
+  var readOnly = childText(node, 'ReadOnly') === 'true' || /NotAnEdit/i.test(editMode);
+  var isSearch = /Поиск|Search/i.test(attr(node, 'name')) && !!hint;
+
+  var inpCls = 'inp' + (stretch && !w ? ' grow' : '') + (isSearch ? ' search' : '') + (readOnly ? ' inp-readonly' : '');
+  var inpStyle = w > 0 ? (' style="width:' + (pxFromChars(w) + 30) + 'px"') : '';
+  var btns = '';
+  if (clear) btns += '<span class="inp-btn">\u2715</span>';
+  if (list) btns += '<span class="inp-btn">\u25BE</span>';
+  if (open) btns += '<span class="inp-btn">\u2197</span>';
+  if (choice) btns += '<span class="inp-btn">...</span>'; // кнопка диалога выбора
+
+  var inputEl;
+  if (isMultiline) {
+    var rows = (!isNaN(h) && h > 1) ? Math.max(2, Math.round(h)) : 3;
+    inputEl = '<textarea rows="' + rows + '" placeholder="' + esc(hint) + '"' + (readOnly ? ' disabled' : '') + '></textarea>';
+  } else {
+    inputEl = '<input type="text" placeholder="' + esc(hint) + '"' + (readOnly ? ' disabled' : '') + '>';
+  }
+  var field = '<span class="' + inpCls + '"' + inpStyle + '>' + inputEl + btns + '</span>';
+
+  if (/None/i.test(titleLoc) || !title) return field;
+  // TitleHeight — несколько строк заголовка (поумолчанию 1)
+  var titleH = parseInt(childText(node, 'TitleHeight')) || 1;
+  var lblStyle = titleH > 1 ? ' style="white-space:normal;min-height:' + (titleH * 14) + 'px"' : '';
+  return '<label class="field"><span class="field-lbl"' + lblStyle + '>' + esc(title) + ':</span>' + field + '</label>';
+}
+function renderCheckbox(node) {
+  var titleLoc = childText(node, 'TitleLocation');
+  var title = getTitle(node) || humanize(childText(node, 'DataPath'));
+  if (/None/i.test(titleLoc)) return '<label class="chk"><input type="checkbox" disabled></label>';
+  return '<label class="chk"><input type="checkbox" disabled><span>' + esc(title) + '</span></label>';
+}
+function formatText(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/<[^>]*>/g, '')
+    .replace(/[ \t\u00A0]+/g, ' ')
+    .trim();
+}
+function renderLabel(node) {
+  var ln = L(node);
+  var rawMarkup = getLang(node, 'Title');
+  var title = formatText(rawMarkup);
+  if (!title) {
+    if (ln === 'LabelDecoration' || ln === 'Decoration') return '';
+    title = humanize(childText(node, 'DataPath')) || humanize(attr(node, 'name'));
+  }
+  var hadLink = /<link/i.test(rawMarkup)
+    || /URLProcessing/i.test((childByName(node, 'Events') ? textOf(childByName(node, 'Events')) : ''))
+    || childText(node, 'Hyperlink') === 'true'
+    || childText(node, 'HiperLink') === 'true'; // опечатка в XML 1С
+  if (!title) return '';
+  return '<span class="lbl' + (hadLink ? ' link' : '') + '">' + esc(title) + '</span>';
+}
+function renderRadio(node) {
+  var title = getTitle(node) || humanize(childText(node, 'DataPath'));
+  var lbl = /None/i.test(childText(node, 'TitleLocation')) ? '' : '<span>' + esc(title) + '</span>';
+  return '<label class="chk"><input type="radio" disabled>' + lbl + '</label>';
+}
+function renderPicture(node) {
+  var stretch = childText(node, 'HorizontalStretch') !== 'false';
+  return '<div class="picfield' + (stretch ? ' grow' : '') + '">'
+    + '<span class="picfield-i">\uD83D\uDDBC\uFE0F</span><span>Изображение</span></div>';
+}
+function renderPictureDeco(node) {
+  return '<span class="ico ico-generic" style="width:18px;height:18px"></span>';
+}
+function renderDocField(node, kind) {
+  var tag = (kind === 'spread') ? 'Табличный документ' : 'Документ';
+  return '<div class="docfield' + (kind === 'spread' ? ' spread' : '') + '">'
+    + '<span class="docfield-tag">' + tag + '</span></div>';
+}
+
+function renderFormCommandBar(formEl) {
+  var acb = childByName(formEl, 'AutoCommandBar');
+  if (!acb) return '';
+  var auto = childText(acb, 'Autofill') !== 'false';
+  var explicit = childItems(acb).map(renderItem).join('');
+  if (!auto && !explicit.trim()) return '';
+  var buttons = (auto ? standardListButtons() : '') + explicit;
+  if (!buttons.trim()) return '';
+  return '<div class="cmdbar">' + buttons + '</div>';
+}
+function renderSearchBar(formEl) {
+  var loc = childText(formEl, 'SearchStringLocation');
+  if (!loc || /None/i.test(loc)) return '';
+  return '<div class="cmdbar">'
+    + '<span class="inp search grow"><input type="text" placeholder="Поиск..."><span class="inp-btn">&#x1F50D;</span></span>'
+    + '</div>';
+}
+function renderForm(formEl, formName) {
+  __uid = 0;
+  var ci = childByName(formEl, 'ChildItems');
+  var body = ci ? elemChildren(ci).map(renderItem).join('') : '';
+  var top = renderFormCommandBar(formEl);
+  var search = renderSearchBar(formEl);
+  // ConditionalAppearance — индикатор наличия условного оформления
+  var hasCA = !!childByName(formEl, 'ConditionalAppearance');
+  var caHint = hasCA ? '<span class="ca-hint" title="Форма имеет условное оформление">⚙️</span>' : '';
+  var title = formName || 'Форма';
+  return '<div class="form-window">'
+    + '<div class="titlebar">'
+    + '<span class="tb-nav">\u2190</span><span class="tb-nav">\u2192</span>'
+    + '<span class="tb-star">\u2606</span>'
+    + '<span class="tb-title">' + esc(title) + '</span>'
+    + caHint
+    + '<span class="tb-spacer"></span>'
+    + '<span class="tb-ico">\u2922</span><span class="tb-ico">\u22EE</span>'
+    + '</div>'
+    + top
+    + search
+    + '<div class="form-body">' + (body || '<div class="empty-note">Форма не содержит видимых элементов.</div>') + '</div>'
+    + '</div>';
+}
+
+(function () {
+  var vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+  var stage = document.getElementById('stage');
+  var errbox = document.getElementById('errbox');
+  var loading = document.getElementById('loading');
+
+  function setLoading(on) {
+    if (loading) loading.style.display = on ? 'flex' : 'none';
+  }
+
+  function showError(msg) {
+    errbox.style.display = 'block';
+    errbox.textContent = msg;
+    stage.innerHTML = '';
+  }
+
+  function clearError() { errbox.style.display = 'none'; errbox.textContent = ''; }
+
+  function mount(xmlText, name) {
+    clearError();
+    setLoading(true);
+    requestAnimationFrame(function () {
+      var doc;
+      try { doc = new DOMParser().parseFromString(xmlText, 'application/xml'); }
+      catch (e) { showError('Не удалось разобрать XML: ' + e.message); setLoading(false); return; }
+      var perr = doc.getElementsByTagName('parsererror');
+      if (perr && perr.length) { showError('Ошибка разбора XML:\n' + perr[0].textContent); setLoading(false); return; }
+      var root = doc.documentElement;
+      if (!root || L(root) !== 'Form') {
+        showError('Это не похоже на выгрузку управляемой формы 1С (ожидался корневой элемент <Form>).');
+        setLoading(false);
+        return;
+      }
+
+      var formName = name ? name.replace(/\.[^.]+$/, '') + ' (Управляемая форма)' : 'Форма (Управляемая форма)';
+      try {
+        stage.innerHTML = renderForm(root, formName);
+      } catch (e) {
+        showError('Ошибка отрисовки: ' + (e && e.stack || e));
+      } finally {
+        setLoading(false);
+      }
+    });
+  }
+
+  /* tab switching */
+  stage.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('.tab');
+    if (!t) return;
+    var bar = t.parentNode;
+    var kids = Array.prototype.slice.call(bar.children);
+    var idx = kids.indexOf(t);
+    kids.forEach(function (b) { b.classList.remove('active'); });
+    t.classList.add('active');
+    var bodies = bar.nextElementSibling;
+    if (bodies) {
+      Array.prototype.slice.call(bodies.children).forEach(function (b, i) {
+        b.classList.toggle('active', i === idx);
+      });
+    }
+  });
+
+  // Listen to messages from extension
+  window.addEventListener('message', function (event) {
+    var message = event.data;
+    if (message.command === 'update') {
+      mount(message.text, message.fileName);
+    }
+  });
+
+  if (vscodeApi) {
+    vscodeApi.postMessage({ command: 'ready' });
+  }
+})();

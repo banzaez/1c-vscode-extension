@@ -139,11 +139,11 @@ for (const rel of templates) {
   }
 }
 
-const shell = fs.readFileSync(path.join(root, 'webview_mxl.html'), 'utf8');
+const shell = fs.readFileSync(path.join(root, 'webview', 'mxl', 'index.html'), 'utf8');
 if (shell.includes('__MXL_APP_SCRIPT__') && !shell.includes('function parseMxl')) {
-  console.log('OK  webview_mxl.html shell');
+  console.log('OK  webview/mxl/index.html shell');
 } else {
-  console.log('FAIL  webview_mxl.html shell');
+  console.log('FAIL  webview/mxl/index.html shell');
   failed++;
 }
 
