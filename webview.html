@@ -669,6 +669,56 @@
       font-style: italic;
       padding: 6px
     }
+
+    /* readonly / disabled поля */
+    .inp.inp-readonly input,
+    .inp.inp-readonly textarea {
+      background: #f4f5f7;
+      color: #888;
+      font-style: italic
+    }
+
+    /* многострочные InputField */
+    .inp textarea {
+      width: 100%;
+      resize: vertical;
+      font-family: var(--1c-font);
+      font-size: 12px;
+      padding: 2px 4px;
+      border: none;
+      outline: none;
+      background: transparent;
+      min-height: 36px
+    }
+
+    /* строка поиска формы */
+    .searchbar {
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--bd-soft);
+      background: #f7f8fa;
+      display: flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    /* итоговая строка таблицы (FooterText) */
+    tfoot td.tfoot-cell {
+      background: var(--row-alt);
+      border-top: 2px solid var(--bd);
+      font-weight: 600;
+      color: #444;
+      padding: 3px 6px;
+      text-align: right
+    }
+
+    /* индикатор условного оформления в заголовке */
+    .ca-hint {
+      font-size: 12px;
+      margin-left: 6px;
+      opacity: 0.65;
+      cursor: default;
+      vertical-align: middle
+    }
   </style>
 </head>
 
@@ -820,7 +870,8 @@
         case 'CommandBar':
         case 'AutoCommandBar': return renderCommandBar(node);
         case 'Button': return renderButton(node);
-        case 'ButtonGroup': return renderButtonGroup(node);
+        case 'ButtonGroup':
+        case 'CommandGroup': return renderButtonGroup(node); // CommandGroup визуально = ButtonGroup
         case 'Popup': return renderPopup(node);
         default: return '';
       }
@@ -896,13 +947,15 @@
         var ln = L(it);
         if (ln === 'LabelField' || ln === 'InputField' || ln === 'PictureField' || ln === 'TextField' || ln === 'CheckBoxField') {
           if (!isColVisible(it)) return;
-          cols.push({ title: colTitle(it), width: widthChars(it), kind: (ln === 'CheckBoxField' ? 'check' : 'text') });
+          var footer = childText(it, 'FooterText') || getLang(it, 'FooterText') || '';
+          cols.push({ title: colTitle(it), width: widthChars(it), kind: (ln === 'CheckBoxField' ? 'check' : 'text'), footerText: footer });
         } else if (ln === 'ColumnGroup') {
           var g = childText(it, 'Group');
           var sub = childItems(it);
           if (/InCell/i.test(g)) {
             var hasCheck = sub.some(function (s) { return L(s) === 'CheckBoxField'; });
-            cols.push({ title: getTitle(it) || '', width: widthChars(it), kind: (hasCheck ? 'check' : 'text') });
+            var footerGrp = childText(it, 'FooterText') || getLang(it, 'FooterText') || '';
+            cols.push({ title: getTitle(it) || '', width: widthChars(it), kind: (hasCheck ? 'check' : 'text'), footerText: footerGrp });
           } else {
             cols = cols.concat(collectColumns(sub));
           }
@@ -947,11 +1000,21 @@
 
       var gcls = 'grid' + (noH ? ' no-hlines' : '') + (noV ? ' no-vlines' : '');
       var thead = hasHeader ? ('<thead><tr>' + ths + '</tr></thead>') : '';
+
+      // FooterText: собираем итоговую строку если у колонок есть FooterText
+      var footCols = collectColumns(childItems(node));
+      var hasFooter = footCols.some(function(c) { return !!c.footerText; });
+      var tfoot = hasFooter
+        ? '<tfoot><tr>' + footCols.map(function(c) {
+            return '<td class="tfoot-cell">' + esc(c.footerText || '') + '</td>';
+          }).join('') + '</tr></tfoot>'
+        : '';
+
       var cmd = renderTableCommandBar(node);
       var w = widthChars(node);
       var wrapStyle = w > 0 ? (' style="flex:0 0 ' + (pxFromChars(w) + 10) + 'px"') : '';
       return '<div class="tablewrap"' + wrapStyle + '>' + cmd
-        + '<div class="tablescroll"><table class="' + gcls + '">' + thead + '<tbody>' + rows + '</tbody></table></div></div>';
+        + '<div class="tablescroll"><table class="' + gcls + '">' + thead + '<tbody>' + rows + '</tbody>' + tfoot + '</table></div></div>';
     }
     function renderTableCommandBar(node) {
       var loc = childText(node, 'CommandBarLocation');
@@ -1010,20 +1073,38 @@
       var clear = childText(node, 'ClearButton') === 'true';
       var list = childText(node, 'ChoiceListButton') === 'true';
       var open = childText(node, 'OpenButton') === 'true';
+      var choice = childText(node, 'ChoiceButton') === 'true'; // кнопка «...» диалога выбора
       var stretch = childText(node, 'HorizontalStretch') !== 'false';
       var w = widthChars(node);
+      var h = parseFloat(childText(node, 'Height'));
+      var vstretch = childText(node, 'VerticalStretch') === 'true';
+      var isMultiline = (!isNaN(h) && h > 1) || vstretch;
+      var editMode = childText(node, 'EditMode');
+      var readOnly = childText(node, 'ReadOnly') === 'true' || /NotAnEdit/i.test(editMode);
       var isSearch = /Поиск|Search/i.test(attr(node, 'name')) && !!hint;
 
-      var inpCls = 'inp' + (stretch && !w ? ' grow' : '') + (isSearch ? ' search' : '');
+      var inpCls = 'inp' + (stretch && !w ? ' grow' : '') + (isSearch ? ' search' : '') + (readOnly ? ' inp-readonly' : '');
       var inpStyle = w > 0 ? (' style="width:' + (pxFromChars(w) + 30) + 'px"') : '';
       var btns = '';
       if (clear) btns += '<span class="inp-btn">\u2715</span>';
       if (list) btns += '<span class="inp-btn">\u25BE</span>';
       if (open) btns += '<span class="inp-btn">\u2197</span>';
-      var field = '<span class="' + inpCls + '"' + inpStyle + '><input type="text" placeholder="' + esc(hint) + '">' + btns + '</span>';
+      if (choice) btns += '<span class="inp-btn">...</span>'; // кнопка диалога выбора
+
+      var inputEl;
+      if (isMultiline) {
+        var rows = (!isNaN(h) && h > 1) ? Math.max(2, Math.round(h)) : 3;
+        inputEl = '<textarea rows="' + rows + '" placeholder="' + esc(hint) + '"' + (readOnly ? ' disabled' : '') + '></textarea>';
+      } else {
+        inputEl = '<input type="text" placeholder="' + esc(hint) + '"' + (readOnly ? ' disabled' : '') + '>';
+      }
+      var field = '<span class="' + inpCls + '"' + inpStyle + '>' + inputEl + btns + '</span>';
 
       if (/None/i.test(titleLoc) || !title) return field;
-      return '<label class="field"><span class="field-lbl">' + esc(title) + ':</span>' + field + '</label>';
+      // TitleHeight — несколько строк заголовка (поумолчанию 1)
+      var titleH = parseInt(childText(node, 'TitleHeight')) || 1;
+      var lblStyle = titleH > 1 ? ' style="white-space:normal;min-height:' + (titleH * 14) + 'px"' : '';
+      return '<label class="field"><span class="field-lbl"' + lblStyle + '>' + esc(title) + ':</span>' + field + '</label>';
     }
     function renderCheckbox(node) {
       var titleLoc = childText(node, 'TitleLocation');
@@ -1048,7 +1129,8 @@
       }
       var hadLink = /<link/i.test(rawMarkup)
         || /URLProcessing/i.test((childByName(node, 'Events') ? textOf(childByName(node, 'Events')) : ''))
-        || childText(node, 'Hyperlink') === 'true';
+        || childText(node, 'Hyperlink') === 'true'
+        || childText(node, 'HiperLink') === 'true'; // опечатка в XML 1С
       if (!title) return '';
       return '<span class="lbl' + (hadLink ? ' link' : '') + '">' + esc(title) + '</span>';
     }
@@ -1081,21 +1163,34 @@
       if (!buttons.trim()) return '';
       return '<div class="cmdbar">' + buttons + '</div>';
     }
+    function renderSearchBar(formEl) {
+      var loc = childText(formEl, 'SearchStringLocation');
+      if (!loc || /None/i.test(loc)) return '';
+      return '<div class="cmdbar">'
+        + '<span class="inp search grow"><input type="text" placeholder="Поиск..."><span class="inp-btn">&#x1F50D;</span></span>'
+        + '</div>';
+    }
     function renderForm(formEl, formName) {
       __uid = 0;
       var ci = childByName(formEl, 'ChildItems');
       var body = ci ? elemChildren(ci).map(renderItem).join('') : '';
       var top = renderFormCommandBar(formEl);
+      var search = renderSearchBar(formEl);
+      // ConditionalAppearance — индикатор наличия условного оформления
+      var hasCA = !!childByName(formEl, 'ConditionalAppearance');
+      var caHint = hasCA ? '<span class="ca-hint" title="Форма имеет условное оформление">⚙️</span>' : '';
       var title = formName || 'Форма';
       return '<div class="form-window">'
         + '<div class="titlebar">'
         + '<span class="tb-nav">\u2190</span><span class="tb-nav">\u2192</span>'
         + '<span class="tb-star">\u2606</span>'
         + '<span class="tb-title">' + esc(title) + '</span>'
+        + caHint
         + '<span class="tb-spacer"></span>'
         + '<span class="tb-ico">\u2922</span><span class="tb-ico">\u22EE</span>'
         + '</div>'
         + top
+        + search
         + '<div class="form-body">' + (body || '<div class="empty-note">Форма не содержит видимых элементов.</div>') + '</div>'
         + '</div>';
     }
